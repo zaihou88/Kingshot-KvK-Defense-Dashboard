@@ -645,6 +645,26 @@ st.markdown(
         background-color: #F0B02E !important;
     }
 
+    /* Battle Plan cards — Castle's roster is always longer than the smaller
+       turrets', which used to leave the Image button at a different height
+       on every card. The column itself is already equal-height (Streamlit's
+       own flex row does that by default); this makes the card fill that
+       height too, then pushes its last child (the download button) to the
+       bottom. Scoped to just these cards via their key prefix, not every
+       nested card elsewhere, since only this row needs equalizing. */
+    [data-testid="stLayoutWrapper"]:has([class*="st-key-bp_card_"]) {
+        height: 100%;
+    }
+    [class*="st-key-bp_card_"] {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    [class*="st-key-bp_card_"] > [data-testid="stElementContainer"]:last-child {
+        margin-top: auto;
+        padding-top: 10px;
+    }
+
     /* Sidebar-less layout: hide the empty sidebar toggle clutter if present */
     [data-testid="collapsedControl"] { display: none; }
 
@@ -789,7 +809,10 @@ tab_officer = tabs[2] if officer_revealed else None
 
 # ---------- Player check-in ----------
 with tab_checkin:
-    submode = st.radio("Entry mode", ["Single entry", "Bulk entry"], horizontal=True, label_visibility="collapsed")
+    submode = st.segmented_control(
+        "Entry mode", ["Single entry", "Bulk entry"], default="Single entry",
+        required=True, label_visibility="collapsed",
+    )
     castle_opts = castle_level_options(state["maxCastleTG"])
 
     if submode == "Single entry":
@@ -877,11 +900,10 @@ with tab_checkin:
             "Pick whichever fits who you're entering. Joiners just need the basics — rally leader candidates "
             "need stats too, since that's what decides who actually leads a tower."
         )
-        bulk_type = st.radio(
+        bulk_type = st.segmented_control(
             "Bulk entry type",
             ["Joiners (basic info)", "Rally leader candidates (with stats)"],
-            horizontal=True,
-            label_visibility="collapsed",
+            default="Joiners (basic info)", required=True, label_visibility="collapsed",
         )
 
         stat_cols_ordered = [f"{TYPE_ABBR[t]} {FIELD_ABBR[f]}" for t in STAT_TYPES for f in STAT_FIELDS]
@@ -1027,7 +1049,7 @@ with tab_battleplan:
         plan_cols = st.columns(len(plan["structures"]))
         for col, s in zip(plan_cols, plan["structures"]):
             with col:
-                with st.container(border=True):
+                with st.container(border=True, key=f"bp_card_{s['id']}"):
                     icon = structure_icon_html(s["kind"] == "castle", size=24)
                     st.markdown(
                         f'<div style="text-align:center;font-weight:700;font-size:1.05em;margin-bottom:4px;">{icon} {_esc(s["name"])}</div>',
@@ -1121,7 +1143,7 @@ if tab_officer:
                     })
                     st.rerun()
 
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2 = st.columns(2)
             with col1:
                 new_tg = st.number_input(
                     "Highest Castle Grade", min_value=1, value=state["maxCastleTG"],
@@ -1138,22 +1160,25 @@ if tab_officer:
                 if gate != state["statGateThreshold"]:
                     state["statGateThreshold"] = gate
                     save_state(state)
-            with col3:
-                new_pass = st.text_input(
-                    "Officer passcode", value=state["officerPasscode"],
-                    help="Required to open this tab. A shared code, not per-person login — anyone who has it gets full access.",
-                )
-                if new_pass != state["officerPasscode"]:
-                    state["officerPasscode"] = new_pass
-                    save_state(state)
-            with col4:
-                new_kpass = st.text_input(
-                    "Kingdom passcode", value=state["kingdomPasscode"],
-                    help="Required for anyone, players included, to open this app at all. Separate from the officer passcode.",
-                )
-                if new_kpass != state["kingdomPasscode"]:
-                    state["kingdomPasscode"] = new_kpass
-                    save_state(state)
+
+            with st.expander("🔒 Security settings — officer and kingdom passcodes"):
+                pcol1, pcol2 = st.columns(2)
+                with pcol1:
+                    new_pass = st.text_input(
+                        "Officer passcode", value=state["officerPasscode"],
+                        help="Required to open this tab. A shared code, not per-person login — anyone who has it gets full access.",
+                    )
+                    if new_pass != state["officerPasscode"]:
+                        state["officerPasscode"] = new_pass
+                        save_state(state)
+                with pcol2:
+                    new_kpass = st.text_input(
+                        "Kingdom passcode", value=state["kingdomPasscode"],
+                        help="Required for anyone, players included, to open this app at all. Separate from the officer passcode.",
+                    )
+                    if new_kpass != state["kingdomPasscode"]:
+                        state["kingdomPasscode"] = new_kpass
+                        save_state(state)
 
             if st.button("🔄 Refresh roster"):
                 st.rerun()
@@ -1209,6 +1234,9 @@ if tab_officer:
                     column_config_roster = {
                         "id": None,
                         "Name": st.column_config.TextColumn(disabled=True),
+                        "Power": st.column_config.NumberColumn(format="compact"),
+                        "Rally": st.column_config.NumberColumn(format="compact"),
+                        "March": st.column_config.NumberColumn(format="compact"),
                         "Tier": st.column_config.SelectboxColumn(options=TIER_OPTIONS),
                         "Castle": st.column_config.SelectboxColumn(options=castle_opts_officer),
                         "Assign": st.column_config.SelectboxColumn(options=assign_options),
